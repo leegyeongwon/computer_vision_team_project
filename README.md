@@ -3,14 +3,15 @@
 ## 실행 방법
 
 1. Python 3.10 환경을 준비하세요. Conda나 가상환경 사용 여부는 상관없습니다.
-2. 아래 두 파일을 같은 폴더에 두세요.
-   - `Detecting Pose.py`
+2. 아래 세 파일을 같은 폴더에 두세요.
+   - `main.py`
+   - `squat_analyzer.py`
    - `pose_landmarker_lite.task`
 3. 해당 폴더에서 터미널을 열고 실행하세요.
 
 ```bash
 python -m pip install mediapipe opencv-python
-python "Detecting Pose.py"
+python "main.py"
 ```
 
 - `python` 명령이 없으면 두 명령 모두 `python3`로 바꿔 실행하세요.
