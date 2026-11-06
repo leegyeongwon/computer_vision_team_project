@@ -1,0 +1,117 @@
+{
+  "session_id": "20261106_130842",
+  "elapsed_sec": 224.5,
+  "total_reps": 9,
+  "good_reps": 7,
+  "bad_reps": 2,
+  "accuracy": 77.8,
+  "error_counts": {
+    "SHALLOW": 1,
+    "TOO_DEEP": 1,
+    "TORSO_LEAN": 0
+  },
+  "avg_min_knee": 95.3,
+  "avg_max_torso": 7.1,
+  "avg_rep_sec": 2.4,
+  "thresholds": {
+    "knee_min": 80.0,
+    "knee_max": 110.0,
+    "torso_max": 40.0
+  },
+  "reps": [
+    {
+      "rep": 1,
+      "time": "13:11:09",
+      "duration_sec": 3.15,
+      "min_knee": 94.6,
+      "min_hip": 131.3,
+      "max_torso": 3.6,
+      "good": true,
+      "errors": []
+    },
+    {
+      "rep": 2,
+      "time": "13:11:18",
+      "duration_sec": 3.78,
+      "min_knee": 63.9,
+      "min_hip": 97.2,
+      "max_torso": 15.6,
+      "good": false,
+      "errors": [
+        "TOO_DEEP"
+      ]
+    },
+    {
+      "rep": 3,
+      "time": "13:11:34",
+      "duration_sec": 1.78,
+      "min_knee": 97.0,
+      "min_hip": 126.2,
+      "max_torso": 5.6,
+      "good": true,
+      "errors": []
+    },
+    {
+      "rep": 4,
+      "time": "13:11:39",
+      "duration_sec": 2.1,
+      "min_knee": 96.7,
+      "min_hip": 134.4,
+      "max_torso": 3.1,
+      "good": true,
+      "errors": []
+    },
+    {
+      "rep": 5,
+      "time": "13:11:44",
+      "duration_sec": 1.97,
+      "min_knee": 99.2,
+      "min_hip": 133.2,
+      "max_torso": 3.7,
+      "good": true,
+      "errors": []
+    },
+    {
+      "rep": 6,
+      "time": "13:11:56",
+      "duration_sec": 2.1,
+      "min_knee": 90.8,
+      "min_hip": 133.2,
+      "max_torso": 7.6,
+      "good": true,
+      "errors": []
+    },
+    {
+      "rep": 7,
+      "time": "13:12:08",
+      "duration_sec": 2.34,
+      "min_knee": 107.3,
+      "min_hip": 140.6,
+      "max_torso": 7.6,
+      "good": true,
+      "errors": []
+    },
+    {
+      "rep": 8,
+      "time": "13:12:16",
+      "duration_sec": 3.61,
+      "min_knee": 88.6,
+      "min_hip": 139.5,
+      "max_torso": 8.2,
+      "good": true,
+      "errors": []
+    },
+    {
+      "rep": 9,
+      "time": "13:12:17",
+      "duration_sec": 0.54,
+      "min_knee": 119.6,
+      "min_hip": 140.7,
+      "max_torso": 9.3,
+      "good": false,
+      "errors": [
+        "SHALLOW"
+      ]
+    }
+  ]
+}

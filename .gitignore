@@ -1,0 +1,8 @@
+batch_results/
+legacy_codes/
+example_images/
+experiment_logs/
+recordings/
+
+.vscode/
+__pycache__/

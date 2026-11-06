@@ -1,16 +1,26 @@
 """
-squat_analyzer.py
------------------
-메인 파이프라인(frame_data)에 붙여 쓰는 스쿼트 자세 분석 모듈.
+squat_session.py
+----------------
+자세 감지 모듈. 웹캠, MediaPipe, MOG2, 창 표시는 main.py가 담당한다.
 
-사용법 (메인 코드의 handle_frame_data 안에서):
-    from squat_analyzer import process_squat
+사용법 (main.py):
+    from squat_session import (
+        process_squat, toggle_panel, new_set, finish_squat_session
+    )
 
     def handle_frame_data(data):
-        process_squat(data)
+        analysis = process_squat(data)
+        ...
 
-필요 패키지:
-    pip install opencv-python numpy
+    # 키 처리
+    elif key == ord("s"): toggle_panel()
+    elif key == ord("x"): new_set()
+
+    # 종료 직전 (cv2.destroyAllWindows() 호출 전에)
+    finish_squat_session()
+
+필요 파일:
+    feedback_record.py (SquatTracker)
 
 참고:
 - 무릎 각도와 상체 기울기는 측면 촬영을 기준으로 한 2D 화면 좌표 기반 지표입니다.
@@ -19,21 +29,25 @@ squat_analyzer.py
 """
 
 import math
+from pathlib import Path
 
 import cv2
 import numpy as np
 
+from .feedback_record import SquatTracker
+
 
 # ---------------------------------------------------------
-# 설정
+# 1. 설정
 # ---------------------------------------------------------
 
 VISIBILITY_THRESHOLD = 0.5
 
 # 초기 테스트용 기준값 (도)
-SQUAT_KNEE_MAX = 110.0     # 이 값 이하이면 DOWN(스쿼트 깊이 도달)
-STANDING_KNEE_MIN = 150.0  # 이 값 이상이면 STANDING
-TORSO_TILT_MAX = 40.0      # 이 값을 넘으면 상체가 많이 기울어진 것으로 판단
+SQUAT_KNEE_MIN = 80.0
+SQUAT_KNEE_MAX = 110.0
+STANDING_KNEE_MIN = 150.0
+TORSO_TILT_MAX = 40.0
 
 # MediaPipe landmark indices
 LEFT_SHOULDER, RIGHT_SHOULDER = 11, 12
@@ -56,16 +70,22 @@ SIDES = {
     },
 }
 
-# 화면 표시용 (BGR). 
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 COLOR_INFO = (255, 255, 0)
 COLOR_STATE = (0, 255, 255)
-COLOR_OK = (0, 255, 0)
 COLOR_WARN = (0, 0, 255)
+
+# 피드백 및 운동 기록 모듈 (import 시 한 번 생성)
+tracker = SquatTracker(
+    knee_min=SQUAT_KNEE_MIN,
+    knee_max=SQUAT_KNEE_MAX,
+    torso_max=TORSO_TILT_MAX,
+    save_dir=Path(__file__).parent / "records",
+)
 
 
 # ---------------------------------------------------------
-# 각도 계산
+# 2. 각도 계산
 # ---------------------------------------------------------
 
 def calculate_angle(a, b, c):
@@ -90,7 +110,7 @@ def calculate_angle(a, b, c):
 
 
 # ---------------------------------------------------------
-# 스쿼트 분석
+# 3. 스쿼트 분석
 # ---------------------------------------------------------
 
 def analyze_squat(landmarks, visibility_threshold=VISIBILITY_THRESHOLD):
@@ -100,12 +120,11 @@ def analyze_squat(landmarks, visibility_threshold=VISIBILITY_THRESHOLD):
     landmarks: frame_data["landmarks_px"][pose]
                landmarks[idx] = (x_px, y_px, z, visibility), 원본 프레임 픽셀 좌표
 
-    좌우 중 필요한 관절이 모두 보이는 쪽(visibility 평균이 높은 쪽)을 사용한다.
-
-    반환: dict
-      valid=False 이면 "message"만 있음.
-      valid=True 이면 side, points, knee_angle, hip_angle, torso_tilt,
-                      phase, torso_ok, feedback([(문구, 정상여부), ...])
+    반환 dict 형식은 squat_pose_analyzer.py와 같다 (SquatTracker 호환).
+      valid=False -> "message"만 있음
+      valid=True  -> side, points, knee_angle, hip_angle, torso_tilt,
+                     squat_phase, depth_ok, torso_ok, feedback(문자열 리스트)
+    experiment_logger 등에서 쓰기 쉽도록 "phase"는 "squat_phase"의 별칭으로 함께 넣는다.
     """
     candidates = []
 
@@ -125,7 +144,7 @@ def analyze_squat(landmarks, visibility_threshold=VISIBILITY_THRESHOLD):
     if not candidates:
         return {
             "valid": False,
-            "message": "Joints not visible. Show full body from the side.",
+            "message": "관절이 충분히 보이도록 전신을 촬영하세요.",
         }
 
     _, side, points = max(candidates, key=lambda item: item[0])
@@ -141,25 +160,29 @@ def analyze_squat(landmarks, visibility_threshold=VISIBILITY_THRESHOLD):
     )
 
     if knee_angle is None or hip_angle is None or torso_tilt is None:
-        return {"valid": False, "message": "Cannot compute angles."}
+        return {"valid": False, "message": "각도를 계산할 수 없습니다."}
 
     # 무릎 각도 기반 동작 구간
     if knee_angle <= SQUAT_KNEE_MAX:
-        phase = "DOWN"
+        squat_phase = "DOWN / SQUAT"
     elif knee_angle >= STANDING_KNEE_MIN:
-        phase = "STANDING"
+        squat_phase = "STANDING"
     else:
-        phase = "MOVING"
+        squat_phase = "MOVING"
 
+    depth_ok = SQUAT_KNEE_MIN <= knee_angle <= SQUAT_KNEE_MAX
     torso_ok = torso_tilt <= TORSO_TILT_MAX
 
     feedback = []
-    if phase == "DOWN":
-        feedback.append(("Depth reached", True))
+
+    if squat_phase == "DOWN / SQUAT" and not depth_ok:
+        feedback.append("무릎 각도를 목표 범위와 비교하세요.")
+
     if not torso_ok:
-        feedback.append(("Torso leaning forward too much", False))
+        feedback.append("상체가 많이 앞으로 기울어져 있습니다.")
+
     if not feedback:
-        feedback.append(("Within reference range", True))
+        feedback.append("분석 기준 범위 안에 있습니다.")
 
     return {
         "valid": True,
@@ -168,23 +191,29 @@ def analyze_squat(landmarks, visibility_threshold=VISIBILITY_THRESHOLD):
         "knee_angle": knee_angle,
         "hip_angle": hip_angle,
         "torso_tilt": torso_tilt,
-        "phase": phase,
+        "squat_phase": squat_phase,
+        "phase": squat_phase,       # 별칭
+        "depth_ok": depth_ok,
         "torso_ok": torso_ok,
         "feedback": feedback,
     }
 
 
 # ---------------------------------------------------------
-# 화면 표시
+# 4. 화면 표시
 # ---------------------------------------------------------
 
-def draw_squat_overlay(frame, analysis, origin=(20, 75)):
-    """분석 결과를 frame 위에 직접 그린다. (frame은 제자리에서 수정됨)"""
+def draw_angle_overlay(frame, analysis, origin=(20, 75)):
+    """
+    각도/상태 텍스트를 frame 위에 직접 그린다. (frame은 제자리에서 수정됨)
+    피드백 문구와 관절 강조는 tracker.draw()가 그린다.
+    """
     x, y = origin
 
     if not analysis["valid"]:
-        cv2.putText(frame, analysis["message"], (x, y),
-                    FONT, 0.6, COLOR_WARN, 2)
+        # analysis["message"]는 한글이라 cv2.putText로 표시할 수 없다.
+        cv2.putText(frame, "Joints not visible. Show full body (side view).",
+                    (x, y), FONT, 0.6, COLOR_WARN, 2)
         return
 
     cv2.putText(frame, f"Knee: {analysis['knee_angle']:.1f} deg",
@@ -193,13 +222,8 @@ def draw_squat_overlay(frame, analysis, origin=(20, 75)):
                 (x, y + 30), FONT, 0.65, COLOR_INFO, 2)
     cv2.putText(frame, f"Torso tilt: {analysis['torso_tilt']:.1f} deg",
                 (x, y + 60), FONT, 0.65, COLOR_INFO, 2)
-    cv2.putText(frame, f"State: {analysis['phase']} ({analysis['side']})",
+    cv2.putText(frame, f"State: {analysis['squat_phase']} ({analysis['side']})",
                 (x, y + 95), FONT, 0.65, COLOR_STATE, 2)
-
-    # 피드백은 모두 표시하고, 항목마다 색을 따로 정한다.
-    for i, (text, ok) in enumerate(analysis["feedback"]):
-        cv2.putText(frame, text, (x, y + 130 + 28 * i),
-                    FONT, 0.55, COLOR_OK if ok else COLOR_WARN, 2)
 
     # 관절 옆에 각도 숫자 표시
     knee_point = analysis["points"]["knee"]
@@ -213,17 +237,58 @@ def draw_squat_overlay(frame, analysis, origin=(20, 75)):
 
 
 # ---------------------------------------------------------
-# 메인 코드에서 부르는 진입점
+# 5. main.py에서 부르는 진입점
 # ---------------------------------------------------------
 
 def process_squat(data):
     """
-    frame_data 한 프레임을 받아 분석하고 annotated_frame에 결과를 그린다.
+    frame_data 한 프레임을 받아 분석하고, 기록을 갱신하고, annotated_frame에 그린다.
     분석 결과 dict를 반환한다. (감지 단계가 아니거나 사람이 없으면 None)
     """
-    if data["stage"] != "detect" or data["num_poses"] == 0:
+    if data["stage"] != "detect":
         return None
 
-    analysis = analyze_squat(data["landmarks_px"][0])
-    draw_squat_overlay(data["annotated_frame"], analysis)
+    analysis = None
+    if data["num_poses"] > 0:
+        analysis = analyze_squat(data["landmarks_px"][0])
+        draw_angle_overlay(data["annotated_frame"], analysis)
+
+    # 사람이 없는 프레임(None)도 tracker에 넘긴다 (원본과 동일)
+    tracker.update(analysis)
+    tracker.draw(data["annotated_frame"], analysis)
+
     return analysis
+
+
+# ---------------------------------------------------------
+# 6. 키 입력 / 종료 처리 (main.py의 키 분기에서 호출)
+# ---------------------------------------------------------
+
+def toggle_panel():
+    """s: 운동 기록 패널 표시/숨김"""
+    tracker.show_panel = not tracker.show_panel
+
+
+def new_set():
+    """x: 현재 세트를 저장하고 새 세트를 시작한다."""
+    tracker.print_summary()
+    saved = tracker.save_summary()
+    if saved:
+        print(f"기록 저장: {saved}")
+    tracker.new_session()
+    print("새 세트를 시작합니다.")
+
+
+def finish_squat_session(show_result=True):
+    """
+    종료 시 호출한다. 결과 화면을 보여 주고(아무 키나 누르면 닫힘) 기록을 저장한다.
+    cv2.destroyAllWindows() 보다 먼저 불러야 결과 창이 보인다.
+    """
+    if show_result:
+        cv2.imshow("Squat Session Result", tracker.render_summary_image())
+        cv2.waitKey(0)
+
+    tracker.print_summary()
+    saved = tracker.save_summary()
+    if saved:
+        print(f"기록 저장: {saved}")
