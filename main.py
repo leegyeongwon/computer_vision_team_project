@@ -99,6 +99,8 @@ def main():
     mask_window_open = False
     input_window_open = False
 
+    pose_sized = False
+
     # Create a 5x5 elliptical kernel to fill small holes in the mask
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 
@@ -169,6 +171,7 @@ def main():
             if pose_window_open:
                 cv2.destroyWindow(POSE_WINDOW)
                 pose_window_open = False
+                pose_sized = False
             if input_window_open:
                 cv2.destroyWindow(INPUT_WINDOW)
                 input_window_open = False
@@ -368,6 +371,13 @@ def main():
         }
         handle_frame_data(frame_data)
         frame_index += 1
+
+        if stage == "detect":
+            if not pose_sized:
+                cv2.namedWindow(POSE_WINDOW, cv2.WINDOW_NORMAL)
+                cv2.resizeWindow(POSE_WINDOW, 960, 540)
+                pose_sized = True
+            cv2.imshow(POSE_WINDOW, frame)
 
         # Display the frame with landmarks, the ROI, status text and handler overlays
         if stage == "detect":
