@@ -372,6 +372,7 @@ def main():
         handle_frame_data(frame_data)
         frame_index += 1
 
+        # Display the frame with landmarks, the ROI, status text and handler overlays
         if stage == "detect":
             if not pose_sized:
                 cv2.namedWindow(POSE_WINDOW, cv2.WINDOW_NORMAL)
@@ -379,9 +380,6 @@ def main():
                 pose_sized = True
             cv2.imshow(POSE_WINDOW, frame)
 
-        # Display the frame with landmarks, the ROI, status text and handler overlays
-        if stage == "detect":
-            cv2.imshow(POSE_WINDOW, frame)
 
         # Update the windows and read one keyboard event
         key = cv2.waitKey(1) & 0xFF
